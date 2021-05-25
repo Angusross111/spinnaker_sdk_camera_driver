@@ -1,8 +1,8 @@
 cam_ids:
-- 17197559
+- 19220812
 cam_aliases:
 - cam0
-master_cam: 17197559
+master_cam: 19220812
 skip: 20
 delay: 1.0
 
@@ -18,22 +18,22 @@ delay: 1.0
 #to_ros: true  #When to_ros is not selected, but live is selected, pressing 'space' exports single image to ROS
 
 #Camera info message details
-distortion_model: plumb_bob
-image_height: 1080
-image_width: 1440
-distortion_coeffs:
-- [-0.021141875266089592, -0.3733872931278025, 2.385982550579459, 3.2824571732099725]
+# distortion_model: plumb_bob
+# image_height: 1080
+# image_width: 1440
+# distortion_coeffs:
+# - [-0.021141875266089592, -0.3733872931278025, 2.385982550579459, 3.2824571732099725]
 
 
 #specified as [fx  0 cx 0 fy cy 0  0  1]
-intrinsic_coeffs:
-- [1886.9232141485886, 0.0, 604.7214878709341, 0.0, 1886.6668765711668, 493.47726714719823, 0.0, 0.0, 1.0]
+# intrinsic_coeffs:
+# - [1886.9232141485886, 0.0, 604.7214878709341, 0.0, 1886.6668765711668, 493.47726714719823, 0.0, 0.0, 1.0]
 
-rectification_coeffs:
-- [1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000]
+# rectification_coeffs:
+# - [1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000]
 
-projection_coeffs:
-- [913.700317, 0.000000, 953.448302, 0.000000, 0.000000, 1063.296631, 777.871993, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000]
+# projection_coeffs:
+# - [913.700317, 0.000000, 953.448302, 0.000000, 0.000000, 1063.296631, 777.871993, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000]
 
 flip_horizontal:
 - false

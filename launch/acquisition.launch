@@ -4,13 +4,13 @@
 
   <!-- acquisition spinnaker params-->
   <arg name="binning"           default="1"      doc="Binning for cameras, when changing from 2 to 1 cameras need to be unplugged and replugged"/>
-  <arg name="color"             default="false"  doc="Should color images be used (only works on models that support color images)"/>
+  <arg name="color"             default="true"  doc="Should color images be used (only works on models that support color images)"/>
   <arg name="exposure_time"     default="0"      doc="Exposure_time setting for cameras"/>
   <arg name="external_trigger"  default="false"  doc="External trigger (No camera is master)"/>
-  <arg name="gain"              default="0"      doc="Gain setting. Gain should be positive (full range - 0 - 18 dB for blackfly-s camera) 
+  <arg name="gain"              default="24.9"      doc="Gain setting. Gain should be positive (full range - 0 - 18 dB for blackfly-s camera) 
                                                       or zero (auto gain). if gain > max, it will be set to max allowed value.
                                                       Default is 0, auto gain which is set according to target grey value or autoexposure settings"/>
-  <arg name="target_grey_value"   default="0"    doc="AutoExposureTargetGreyValue min: 4 max: 99 if set below 4,
+  <arg name="target_grey_value"   default="20"    doc="AutoExposureTargetGreyValue min: 4 max: 99 if set below 4,
                                                       AutoExposureTargetGreyValueAuto will be set to continuous(auto)
                                                       also available as dynamic reconfigurable parameter.
                                                       This parameter has no meaning when auto exposure and auto gain are off" />
@@ -21,7 +21,7 @@
   <arg name="save"              default="false"  doc="flag whether images should be saved or not"/>
   <arg name="save_path"         default="~"      doc="location to save the image data"/>
   <arg name="save_type"         default="bmp"    doc="Type of file type to save to when saving images locally: binary, tiff, bmp, jpeg etc." />
-  <arg name="soft_framerate"    default="30"     doc="When hybrid software triggering is used, this controls the FPS, 0=as fast as possible"/>
+  <arg name="soft_framerate"    default="10"     doc="When hybrid software triggering is used, this controls the FPS, 0=as fast as possible"/>
   <arg name="time"              default="false"  doc="Show time/FPS on output"/>
   <arg name="to_ros"            default="true"   doc="Flag whether images should be published to ROS" />
   <arg name="utstamps"          default="false"  doc="Flag whether each image should have Unique timestamps vs the master cams time stamp for all" />
