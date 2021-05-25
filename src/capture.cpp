@@ -731,9 +731,10 @@ void acquisition::Capture::init_cameras(bool soft = false) {
                 // cams[i].setFloatValue("AcquisitionFrameRate", 5.0);
 
                 if (color_)
-                        cams[i].setEnumValue("PixelFormat", "BGR8");
+                        cams[i].setEnumValue("PixelFormat", "BayerRG8");
                     else
                         cams[i].setEnumValue("PixelFormat", "Mono8");
+                
                 cams[i].setEnumValue("AcquisitionMode", "Continuous");
                 
                 // set only master to be software triggered
