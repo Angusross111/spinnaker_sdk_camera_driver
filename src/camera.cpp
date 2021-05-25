@@ -56,7 +56,7 @@ ImagePtr acquisition::Camera::grab_frame() {
                 ROS_WARN_STREAM_COND(frameID_ > lastFrameID_ + 1,"Frames are being skipped!");
             } else {
                 frameID_ = pResultImage->GetFrameID();
-                ROS_ASSERT_MSG(frameID_ == 0 ,"First frame ID was not zero! Might cause sync issues later...");
+                // ROS_ASSERT_MSG(frameID_ == 0 ,"First frame ID was not zero! Might cause sync issues later...");
             }
 
         }
