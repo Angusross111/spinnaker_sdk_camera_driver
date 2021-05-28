@@ -10,6 +10,7 @@
 //ROS
 #include "std_msgs/Float64.h"
 #include "std_msgs/String.h"
+#include "std_msgs/Bool.h"
 //Dynamic reconfigure
 #include <dynamic_reconfigure/server.h>
 #include <spinnaker_sdk_camera_driver/spinnaker_camConfig.h>
@@ -131,9 +132,11 @@ namespace acquisition {
         bool TIME_BENCHMARK_;
         bool MASTER_TIMESTAMP_FOR_ALL_;
         bool EXTERNAL_TRIGGER_;
+        bool CODE_TRIGGER_;
         bool SAVE_;
         bool SAVE_BIN_;
         bool MANUAL_TRIGGER_;
+        bool SOFTWARE_TRIGGER_;
         bool LIVE_;
         bool CAM_DIRS_CREATED_;
         bool GRID_VIEW_;
@@ -145,6 +148,10 @@ namespace acquisition {
         bool VERIFY_BINNING_;
         uint64_t SPINNAKER_GET_NEXT_IMAGE_TIMEOUT_;
         
+        void assignSoftwareTriggerCallback(const std_msgs::Bool::ConstPtr& msg);
+        ros::Subscriber software_trigger_sub_;
+
+
         #ifdef trigger_msgs_FOUND
             ros::Time latest_imu_trigger_time_;
             uint32_t prev_imu_trigger_count_ = 0; 

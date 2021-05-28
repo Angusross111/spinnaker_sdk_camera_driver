@@ -87,6 +87,7 @@ void acquisition::Capture::init_variables_register_to_ros() {
     TIME_BENCHMARK_ = false;
     MASTER_TIMESTAMP_FOR_ALL_ = true;
     EXTERNAL_TRIGGER_ = false;
+    CODE_TRIGGER_ = true;
     EXPORT_TO_ROS_ = false;
     PUBLISH_CAM_INFO_ = false;
     SAVE_ = false;
@@ -127,6 +128,7 @@ void acquisition::Capture::init_variables_register_to_ros() {
     // default flag values
 
     MANUAL_TRIGGER_ = false;
+    SOFTWARE_TRIGGER_ = false;
     CAM_DIRS_CREATED_ = false;
 
     GRID_CREATED_ = false;
@@ -149,6 +151,8 @@ void acquisition::Capture::init_variables_register_to_ros() {
                     << spinnakerLibraryVersion.type << "."
                     << spinnakerLibraryVersion.build);
  
+    software_trigger_sub_ = nh_.subscribe("/ImageCollectionProcessing/software_trigger", 1000, &acquisition::Capture::assignSoftwareTriggerCallback,this);
+
     load_cameras();
 
     //initializing the ros publisher
@@ -201,7 +205,7 @@ void acquisition::Capture::load_cameras() {
         for (int i=0; i<numCameras_; i++) {
         
             acquisition::Camera cam(camList_.GetByIndex(i));
-            if (!EXTERNAL_TRIGGER_){
+            if (!EXTERNAL_TRIGGER_ and !CODE_TRIGGER_){
                 cam.setGetNextImageTimeout(SPINNAKER_GET_NEXT_IMAGE_TIMEOUT_);  // set to finite number when not using external triggering
             }
 
@@ -1058,7 +1062,6 @@ void acquisition::Capture::run_soft_trig() {
 
             int key = waitKey(1);
             ROS_DEBUG_STREAM("Key press: "<<(key & 255)<<endl);
-            
             if ( (key & 255)!=255 ) {
 
                 if ( (key & 255)==83 ) {
@@ -1095,9 +1098,13 @@ void acquisition::Capture::run_soft_trig() {
             // Call update functions
             if (!MANUAL_TRIGGER_) {
                 if (!EXTERNAL_TRIGGER_) {
-                    cams[MASTER_CAM_].trigger();
+                    if (SOFTWARE_TRIGGER_) {
+                        cams[MASTER_CAM_].trigger();
+                        SOFTWARE_TRIGGER_ = false;
+                        get_mat_images();
+                    }
                 }
-                get_mat_images();
+                
             }
 
             if (SAVE_) {
@@ -1415,6 +1422,13 @@ void acquisition::Capture::dynamicReconfigureCallback(spinnaker_sdk_camera_drive
     }
 }
 
+
+void acquisition::Capture::assignSoftwareTriggerCallback(const std_msgs::Bool::ConstPtr& msg){
+    
+    ROS_INFO_STREAM("Callback");
+    SOFTWARE_TRIGGER_ = true;
+    
+}
 #ifdef trigger_msgs_FOUND
     void acquisition::Capture::assignTimeStampCallback(const trigger_msgs::sync_trigger::ConstPtr& msg){
         //ROS_INFO_STREAM("Time stamp is "<< msg->header.stamp);
