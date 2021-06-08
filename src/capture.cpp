@@ -87,7 +87,8 @@ void acquisition::Capture::init_variables_register_to_ros() {
     TIME_BENCHMARK_ = false;
     MASTER_TIMESTAMP_FOR_ALL_ = true;
     EXTERNAL_TRIGGER_ = false;
-    CODE_TRIGGER_ = true;
+    CODE_TRIGGER_ = false;
+    trigger_capture_ = false;
     EXPORT_TO_ROS_ = false;
     PUBLISH_CAM_INFO_ = false;
     SAVE_ = false;
@@ -128,7 +129,6 @@ void acquisition::Capture::init_variables_register_to_ros() {
     // default flag values
 
     MANUAL_TRIGGER_ = false;
-    SOFTWARE_TRIGGER_ = false;
     CAM_DIRS_CREATED_ = false;
 
     GRID_CREATED_ = false;
@@ -366,6 +366,9 @@ void acquisition::Capture::read_parameters() {
     
     if (nh_pvt_.getParam("external_trigger", EXTERNAL_TRIGGER_)){
         ROS_INFO("  External trigger: %s",EXTERNAL_TRIGGER_?"true":"false");
+    }
+    if (nh_pvt_.getParam("code_trigger", CODE_TRIGGER_)){
+        ROS_INFO("  Code trigger: %s",CODE_TRIGGER_?"true":"false");
     }
     else ROS_WARN("  'external_trigger' Parameter not set, using default behavior external_trigger=%s",EXTERNAL_TRIGGER_?"true":"false");
 
@@ -1098,10 +1101,15 @@ void acquisition::Capture::run_soft_trig() {
             // Call update functions
             if (!MANUAL_TRIGGER_) {
                 if (!EXTERNAL_TRIGGER_) {
-                    if (SOFTWARE_TRIGGER_) {
+                    if (!CODE_TRIGGER_) { 
                         cams[MASTER_CAM_].trigger();
-                        SOFTWARE_TRIGGER_ = false;
                         get_mat_images();
+                    }else{
+                        if (trigger_capture_) {
+                             cams[MASTER_CAM_].trigger();
+                             get_mat_images();
+                             trigger_capture_ = false;
+                        }
                     }
                 }
                 
@@ -1426,7 +1434,7 @@ void acquisition::Capture::dynamicReconfigureCallback(spinnaker_sdk_camera_drive
 void acquisition::Capture::assignSoftwareTriggerCallback(const std_msgs::Bool::ConstPtr& msg){
     
     ROS_INFO_STREAM("Callback");
-    SOFTWARE_TRIGGER_ = true;
+    trigger_capture_ = true;
     
 }
 #ifdef trigger_msgs_FOUND

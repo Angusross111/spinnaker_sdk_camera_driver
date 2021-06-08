@@ -137,6 +137,7 @@ namespace acquisition {
         bool SAVE_BIN_;
         bool MANUAL_TRIGGER_;
         bool SOFTWARE_TRIGGER_;
+        bool trigger_capture_;
         bool LIVE_;
         bool CAM_DIRS_CREATED_;
         bool GRID_VIEW_;
