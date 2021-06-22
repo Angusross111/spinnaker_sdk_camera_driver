@@ -22,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
   nodelet
 )
 find_package(trigger_msgs)
+find_package(exiv2 REQUIRED)
 #find_package(PCL REQUIRED)
 
 ###
@@ -121,7 +122,7 @@ add_library (acquilib SHARED
   src/camera.cpp
 )
 add_dependencies(acquilib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
-target_link_libraries(acquilib ${LIBS} ${catkin_LIBRARIES})
+target_link_libraries(acquilib ${LIBS} ${catkin_LIBRARIES} exiv2)
 
 add_executable (acquisition_node src/acquisition_node.cpp)
 add_dependencies(acquisition_node acquilib ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)

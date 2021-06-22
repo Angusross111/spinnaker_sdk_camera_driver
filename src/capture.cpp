@@ -866,7 +866,32 @@ void acquisition::Capture::save_mat_frames(int dump) {
             //ros image names 
             mesg.name.push_back(filename.str());
             imwrite(filename.str(), frames_[i]);
-            
+            try {
+                boost::property_tree::ptree ptree;
+                ptree.put("camera.easting", 123123123);
+                ptree.put("camera.northing", 123123123);
+                ptree.put("camera.altitude", 123123123);
+                ptree.put("camera.zone", 12);
+
+                std::ofstream file;
+	            std::ostringstream oss;
+
+	            boost::property_tree::write_json(oss, ptree);
+
+                Exiv2::ExifData exif_data;
+                exif_data["Exif.Image.Model"] = "Test 1";  
+                exif_data["Exif.Image.ImageDescription"] = oss.str(); 
+                Exiv2::Image::UniquePtr image_exif_file = Exiv2::ImageFactory::open(filename.str());
+                image_exif_file->setExifData(exif_data);
+				image_exif_file->writeMetadata();
+
+            }
+            catch( const Exiv2::AnyError& ex )
+            {
+                // ROS_ERROR("Could not write the exif data to '%s' -- %s", filename.str(), ex.what());
+                ROS_WARN("Could not write the exif data - %s",ex.what());
+                
+            }
         }
 
     }
@@ -1399,6 +1424,7 @@ std::string acquisition::Capture::todays_date()
     std::string td(out);
     return td;
 }
+
 
 void acquisition::Capture::dynamicReconfigureCallback(spinnaker_sdk_camera_driver::spinnaker_camConfig &config, uint32_t level){
     

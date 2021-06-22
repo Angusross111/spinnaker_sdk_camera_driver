@@ -24,6 +24,12 @@
 #include <nodelet/loader.h>
 #include "pluginlib/class_list_macros.h"
 
+// Exiv2
+#include <exiv2/exiv2.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+
+
 #ifdef trigger_msgs_FOUND
   #include <trigger_msgs/sync_trigger.h>
 #endif 
