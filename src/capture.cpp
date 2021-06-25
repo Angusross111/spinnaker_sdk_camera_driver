@@ -746,7 +746,7 @@ void acquisition::Capture::init_cameras(bool soft = false) {
                 
                 // set only master to be software triggered
                 if (cams[i].is_master()) { 
-                    if (MAX_RATE_SAVE_){
+                    if (MAX_RATE_SAVE_ && !CODE_TRIGGER_){
                       cams[i].setEnumValue("LineSelector", "Line2");
                       cams[i].setEnumValue("LineMode", "Output");
                       cams[i].setBoolValue("AcquisitionFrameRateEnable", false);
@@ -1232,78 +1232,43 @@ void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_n
  
     ROS_DEBUG("  Write Queue to Disk Thread Initiated for cam: %d", cam_no);
 
-    int imageCnt =0;
+
     string id = cam_ids_[cam_no];
 
-    int k_numImages = nframes_;
-
-    while (imageCnt < k_numImages){
-//     ROS_DEBUG_STREAM("  Write Queue to Disk for cam: "<< cam_no <<" size = "<<img_q->size());
-
-        #ifdef trigger_msgs_FOUND
-            // sleep for 5 milliseconds if the queue is empty        
-            if(img_q->empty() || sync_message_queue_vector_.at(cam_no).empty()){
-                boost::this_thread::sleep(boost::posix_time::milliseconds(5));
-                continue;
-            }
-        #endif
-        
-        #ifndef trigger_msgs_FOUND
-            if(img_q->empty()){
-                boost::this_thread::sleep(boost::posix_time::milliseconds(5));
-                continue;
-            }
-        #endif
-
-        ROS_DEBUG_STREAM("  Write Queue to Disk for cam: "<< cam_no <<" size = "<<img_q->size());
-
-        if (img_q->size()>100)
-            ROS_WARN_STREAM("  Queue "<<cam_no<<" size is :"<< img_q->size());
-
-        #ifdef trigger_msgs_FOUND
-            if (abs((int)img_q->size() - (int)sync_message_queue_vector_.at(cam_no).size()) > 100){
-                  ROS_WARN_STREAM(" The camera image queue size is increasing, the sync trigger messages are not coming at the desired rate");
-            }
-        #endif
-
-        ImagePtr convertedImage = img_q->front();
-        
-        #ifdef trigger_msgs_FOUND
-            uint64_t timeStamp;
-            if (EXTERNAL_TRIGGER_){
-            SyncInfo_ sync_info = sync_message_queue_vector_.at(cam_no).front();
-            sync_info.latest_imu_trigger_count_;
-            timeStamp = sync_info.latest_imu_trigger_time_.toSec() * 1e6;
-            ROS_INFO("time Queue size for cam %d is = %d",cam_no,sync_message_queue_vector_.at(cam_no).size());
-            sync_message_queue_vector_.at(cam_no).pop();
-            }
-            else{
-            timeStamp =  convertedImage->GetTimeStamp() * 1e6;
-            }
-        #endif
-
-        #ifndef trigger_msgs_FOUND
-            uint64_t timeStamp = convertedImage->GetTimeStamp() * 1e6;
-        #endif
-
-        // Create a unique filename
-        ostringstream filename;
-        filename<<path_<<cam_names_[cam_no]<<"/"<<cam_names_[cam_no]
-                <<"_"<<id<<"_"<<todays_date_ << "_"<<std::setfill('0')
-                << std::setw(6) << imageCnt<<"_"<<timeStamp << ext_; 
+    int imageCnt =0;
+    uint64_t timeStamp = 0;
+    try{
+        while( ros::ok() ) {
             
-//     ROS_DEBUG_STREAM("Writing to "<<filename.str().c_str());
+            if (img_q->size()== 0)
+                continue;
+            ROS_DEBUG_STREAM("  Write Queue to Disk for cam: "<< cam_no <<" size = "<<img_q->size());
 
-        convertedImage->Save(filename.str().c_str());
-        // release the image before popping out to save memory
-        convertedImage->Release();
-        ROS_INFO("image Queue size for cam %d is = %zu",cam_no, img_q->size());
-        queue_mutex_.lock();
-        img_q->pop();
-        queue_mutex_.unlock();
+            if (img_q->size()>100)
+                ROS_WARN_STREAM("  Queue "<<cam_no<<" size is :"<< img_q->size());
+            
+            ImagePtr convertedImage = img_q->front();
+            timeStamp =  convertedImage->GetTimeStamp() * 1000;
+            // Create a unique filename
+            ostringstream filename;
+            filename<<path_<<cam_names_[cam_no]<<"/"<<cam_names_[cam_no]
+                    <<"_"<<id<<"_"<<todays_date_ << "_"<<std::setfill('0')
+                    << std::setw(6) << imageCnt<<"_"<<timeStamp << ext_; 
+                
+            convertedImage->Save(filename.str().c_str());
+            // release the image before popping out to save memory
+            convertedImage->Release();
+            ROS_INFO("image Queue size for cam %d is = %zu",cam_no, img_q->size());
+            queue_mutex_.lock();
+            img_q->pop();
+            queue_mutex_.unlock();
 
-        ROS_DEBUG_STREAM("Image saved at " << filename.str());
-        imageCnt++;
+            ROS_DEBUG_STREAM("Image saved at " << filename.str());
+            imageCnt++;
+        }
+    }
+    catch(const std::exception &e){
+        ROS_FATAL_STREAM("Exception: "<<e.what());
     }
 }
 
@@ -1315,69 +1280,39 @@ void acquisition::Capture::acquire_images_to_queue(vector<queue<ImagePtr>>*  img
     ROS_DEBUG("  Acquire Images to Queue Thread -> Acquisition Started");
     
     // Retrieve, convert, and save images for each camera
-    
-    int k_numImages = nframes_;
     auto start = ros::Time::now().toSec();
     auto elapsed = (ros::Time::now().toSec() - start)*1000;
-    
-    double flush_start_time = ros::Time::now().toSec();
-    while ((ros::Time::now().toSec() - flush_start_time) < 3.0){
-        for (int i = 0; i < numCameras_; i++) {
-            cams[i].grab_frame();
-        }
-        ROS_DEBUG("Flushing time elapsed: %.3f",ros::Time::now().toSec() - flush_start_time);
-    }
 
-    first_image_received = true;
+    try{
+        while( ros::ok() ) {
+            uint64_t timeStamp = 0;
+            for (int i = 0; i < numCameras_; i++) {
+                try {
+                    //  grab_frame() is a blocking call. It waits for the next image acquired by the camera 
+                    ImagePtr convertedImage = cams[i].grab_frame();
+               
+                    queue_mutex_.lock();
+                    img_qs->at(i).push(convertedImage);
+                    queue_mutex_.unlock();
 
-    for (int imageCnt = 0; imageCnt < k_numImages; imageCnt++) {
-        uint64_t timeStamp = 0;
-        for (int i = 0; i < numCameras_; i++) {
-            try {
-                //  grab_frame() is a blocking call. It waits for the next image acquired by the camera 
-                //ImagePtr pResultImage = cams[i].grab_frame();
-                ImagePtr convertedImage = cams[i].grab_frame();
-                // Convert image to mono 8
-                //ImagePtr convertedImage = pResultImage->Convert(PixelFormat_Mono8, HQ_LINEAR);
-
-                if(cams[i].is_master()) {
-                    mesg.header.stamp = ros::Time::now();
+                    ROS_DEBUG_STREAM("Queue no. "<<i<<" size: "<<img_qs->at(i).size());
+   
                 }
-                timeStamp =  convertedImage->GetTimeStamp() * 1000;
-                // Create a unique filename
-                ostringstream filename;
-                //filename << cam_ids_[i].c_str()<< "-" << imageCnt << ext_;
-                filename << cam_names_[i]<<"_"<<cam_ids_[i].c_str()
-                         << "_"<<todays_date_ << "_"<< std::setfill('0') 
-                         << std::setw(6) << imageCnt<<"_"<<timeStamp << ext_;
-                imageNames.push_back(filename.str());
-
-                queue_mutex_.lock();
-                img_qs->at(i).push(convertedImage);
-                queue_mutex_.unlock();
-
-                ROS_DEBUG_STREAM("Queue no. "<<i<<" size: "<<img_qs->at(i).size());
-
-                // Release image
-                //convertedImage->Release();
-            }
-            catch (Spinnaker::Exception &e) {
-                ROS_ERROR_STREAM("  Exception in Acquire to queue thread" << "\nError: " << e.what());
-                result = -1;
-            }
-            if(i==0) {
-                elapsed = (ros::Time::now().toSec() - start)*1000;
-                start = ros::Time::now().toSec();
-                //cout << "Microsecs passed: " << microseconds << endl;
-                ROS_DEBUG_STREAM("Rate of cam 0 write to queue: " << 1e3/elapsed);
+                catch (Spinnaker::Exception &e) {
+                    ROS_ERROR_STREAM("  Exception in Acquire to queue thread" << "\nError: " << e.what());
+                    result = -1;
+                }
+                if(i==0) {
+                    elapsed = (ros::Time::now().toSec() - start)*1000;
+                    start = ros::Time::now().toSec();
+                    //cout << "Microsecs passed: " << microseconds << endl;
+                    ROS_DEBUG_STREAM("Rate of cam 0 write to queue: " << 1e3/elapsed);
+                }
             }
         }
-        mesg.name = imageNames;
-        //make sure that the vector has no image file names
-        imageNames.clear();
-
-        // ros publishing messages
-        acquisition_pub.publish(mesg);
+    }
+    catch(const std::exception &e){
+        ROS_FATAL_STREAM("Exception: "<<e.what());
     }
     return;
 }
