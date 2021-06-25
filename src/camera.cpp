@@ -247,7 +247,7 @@ void acquisition::Camera::adcBitDepth(gcstring bitDep) {
 
 void acquisition::Camera::setBufferSize(int numBuf) {
     INodeMap & sNodeMap = pCam_->GetTLStreamNodeMap();
-    CIntegerPtr StreamNode = sNodeMap.GetNode("StreamDefaultBufferCount");
+    CIntegerPtr StreamNode = sNodeMap.GetNode("StreamBufferCountManual");
     int64_t bufferCount = StreamNode->GetValue();
     if (!IsAvailable(StreamNode) || !IsWritable(StreamNode)){
         ROS_FATAL_STREAM("Unable to set StreamMode " << "). Aborting...");

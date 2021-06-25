@@ -688,7 +688,7 @@ void acquisition::Capture::init_cameras(bool soft = false) {
             cams[i].init();
 
             if (!soft) {
-
+                cams[i].setBufferSize(100);
                 cams[i].set_color(color_);
                 cams[i].setIntValue("BinningHorizontal", binning_);
                 cams[i].setIntValue("BinningVertical", binning_);                
