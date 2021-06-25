@@ -11,6 +11,7 @@
 #include "std_msgs/Float64.h"
 #include "std_msgs/String.h"
 #include "std_msgs/Bool.h"
+#include "msgs_and_srvs/ImageTriggerMsg.h"
 //Dynamic reconfigure
 #include <dynamic_reconfigure/server.h>
 #include <spinnaker_sdk_camera_driver/spinnaker_camConfig.h>
@@ -155,7 +156,7 @@ namespace acquisition {
         bool VERIFY_BINNING_;
         uint64_t SPINNAKER_GET_NEXT_IMAGE_TIMEOUT_;
         
-        void assignSoftwareTriggerCallback(const std_msgs::Bool::ConstPtr& msg);
+        void assignSoftwareTriggerCallback(const msgs_and_srvs::ImageTriggerMsg::ConstPtr& msg);
         ros::Subscriber software_trigger_sub_;
 
 

@@ -1457,11 +1457,11 @@ void acquisition::Capture::dynamicReconfigureCallback(spinnaker_sdk_camera_drive
 }
 
 
-void acquisition::Capture::assignSoftwareTriggerCallback(const std_msgs::Bool::ConstPtr& msg){
+void acquisition::Capture::assignSoftwareTriggerCallback(const msgs_and_srvs::ImageTriggerMsg::ConstPtr& msg){
     
     ROS_INFO_STREAM("Callback");
     trigger_capture_ = true;
-    
+    cams[MASTER_CAM_].trigger();
 }
 #ifdef trigger_msgs_FOUND
     void acquisition::Capture::assignTimeStampCallback(const trigger_msgs::sync_trigger::ConstPtr& msg){
