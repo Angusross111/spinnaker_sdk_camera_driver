@@ -1,0 +1,7 @@
+cam_ids:
+  - 19277203
+  - 19220812
+cam_aliases:
+  - cam0
+  - cam1
+master_cam: 19277203
