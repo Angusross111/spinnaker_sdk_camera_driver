@@ -104,12 +104,6 @@ void acquisition::Capture::init_variables_register_to_ros() {
     SPINNAKER_GET_NEXT_IMAGE_TIMEOUT_ = 2000;
     todays_date_ = todays_date();
     
-    #ifdef trigger_msgs_FOUND
-        // Initialise the time variables for sync in with camera
-        latest_imu_trigger_time_ = ros::Time::now();
-        prev_imu_trigger_count_ = 0; 
-        latest_imu_trigger_count_ = 0;
-    #endif
 
     first_image_received = false;
 
@@ -158,17 +152,6 @@ void acquisition::Capture::init_variables_register_to_ros() {
     //initializing the ros publisher
     acquisition_pub = nh_.advertise<spinnaker_sdk_camera_driver::SpinnakerImageNames>("camera", 1000);
 
-    #ifdef trigger_msgs_FOUND
-    // initiliazing the trigger subscriber
-        if (EXTERNAL_TRIGGER_){
-            timeStamp_sub = nh_.subscribe("/imu/sync_trigger", 1000, &acquisition::Capture::assignTimeStampCallback,this);
-
-            for ( int i=0;i<numCameras_;i++){
-                std::queue<SyncInfo_> sync_message_queue;
-                sync_message_queue_vector_.push_back(sync_message_queue);
-            }
-        }
-    #endif
     
     //dynamic reconfigure
     dynamicReCfgServer_ = new dynamic_reconfigure::Server<spinnaker_sdk_camera_driver::spinnaker_camConfig>(nh_pvt_);
@@ -372,10 +355,6 @@ void acquisition::Capture::read_parameters() {
     }
     else ROS_WARN("  'external_trigger' Parameter not set, using default behavior external_trigger=%s",EXTERNAL_TRIGGER_?"true":"false");
 
-    #ifndef trigger_msgs_FOUND
-      if (EXTERNAL_TRIGGER_)
-          ROS_WARN("  Using 'external_trigger'. Trigger msgs package not found, will use machine timestamps");
-    #endif
 
     // Unless external trigger is being used, a master cam needs to be specified
     // If the external trigger is set, all the cameras are set up as slave    int mcam_int;
@@ -904,31 +883,6 @@ void acquisition::Capture::export_to_ROS() {
     double t = ros::Time::now().toSec();
     std_msgs::Header img_msg_header;
     
-    #ifdef trigger_msgs_FOUND
-        if (EXTERNAL_TRIGGER_){
-            if (latest_imu_trigger_count_ - prev_imu_trigger_count_ > 1 ){
-                ROS_WARN("Difference in trigger count more than 1, latest_count = %d and prev_count = %d",latest_imu_trigger_count_,prev_imu_trigger_count_);
-            }
-
-            else if (latest_imu_trigger_count_ - prev_imu_trigger_count_ == 0){
-                double wait_time_start = ros::Time::now().toSec();
-                ROS_WARN("Difference in trigger count zero, latest_count = %d and prev_count = %d",latest_imu_trigger_count_,prev_imu_trigger_count_);
-                while(latest_imu_trigger_count_ - prev_imu_trigger_count_ == 0){	
-                    ros::Duration(0.0001).sleep();
-                }
-                ROS_INFO_STREAM("Time gap for sync messages: "<<ros::Time::now().toSec() - wait_time_start);
-            }
-            img_msg_header.stamp = latest_imu_trigger_time_;
-            prev_imu_trigger_count_ = latest_imu_trigger_count_;
-        }
-        else {
-            img_msg_header.stamp = mesg.header.stamp;
-        }
-    #endif
-
-     #ifndef trigger_msgs_FOUND
-        img_msg_header.stamp = mesg.header.stamp;
-    #endif
     
     string frame_id_prefix;
     if (tf_prefix_.compare("") != 0)
@@ -1398,24 +1352,4 @@ void acquisition::Capture::assignSoftwareTriggerCallback(const msgs_and_srvs::Im
     trigger_capture_ = true;
     cams[MASTER_CAM_].trigger();
 }
-#ifdef trigger_msgs_FOUND
-    void acquisition::Capture::assignTimeStampCallback(const trigger_msgs::sync_trigger::ConstPtr& msg){
-        //ROS_INFO_STREAM("Time stamp is "<< msg->header.stamp);
 
-         SyncInfo_ sync_info;
-        latest_imu_trigger_count_ = msg->count;
-        latest_imu_trigger_time_ = msg->header.stamp;
-        sync_info.latest_imu_trigger_count_ = latest_imu_trigger_count_;
-        sync_info.latest_imu_trigger_time_ = latest_imu_trigger_time_;
-        ROS_DEBUG("Sync trigger receieved");
-        if(first_image_received){
-            for (int i = 0; i < numCameras_; i++){
-                sync_message_queue_vector_.at(i).push(sync_info);
-                ROS_DEBUG("Sync trigger added to cam: %d, length of queue: %d",i,sync_message_queue_vector_.at(i).size());
-            }
-        }
-        //double curr_time_msg_recieved = ros::Time::now().toSec();
-        //sync_trigger_rate = 1/(curr_time_msg_recieved - last_time_msg_recieved);
-        //last_time_msg_recieved = curr_time_msg_recieved;
-    }
-#endif

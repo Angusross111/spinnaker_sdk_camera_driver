@@ -31,10 +31,6 @@
 #include <boost/property_tree/json_parser.hpp>
 
 
-#ifdef trigger_msgs_FOUND
-  #include <trigger_msgs/sync_trigger.h>
-#endif 
-
 using namespace Spinnaker;
 using namespace Spinnaker::GenApi;
 using namespace Spinnaker::GenICam;
@@ -159,21 +155,6 @@ namespace acquisition {
         void assignSoftwareTriggerCallback(const msgs_and_srvs::ImageTriggerMsg::ConstPtr& msg);
         ros::Subscriber software_trigger_sub_;
 
-
-        #ifdef trigger_msgs_FOUND
-            ros::Time latest_imu_trigger_time_;
-            uint32_t prev_imu_trigger_count_ = 0; 
-            uint32_t latest_imu_trigger_count_;
-
-            void assignTimeStampCallback(const trigger_msgs::sync_trigger::ConstPtr& msg);
-            struct SyncInfo_{
-                uint32_t latest_imu_trigger_count_;
-                ros::Time latest_imu_trigger_time_;
-            };
-            std::vector<std::queue<SyncInfo_>> sync_message_queue_vector_;
-            ros::Subscriber timeStamp_sub;
-        #endif
-        
         
         bool region_of_interest_set_;
         int region_of_interest_width_;
