@@ -1,6 +1,6 @@
 <launch>
   <!-- configure console output verbosity mode:debug_console.conf or std_console.conf -->
-  <env name="ROSCONSOLE_CONFIG_FILE" value="$(find spinnaker_sdk_camera_driver)/cfg/std_console.conf"/>
+  <env name="ROSCONSOLE_CONFIG_FILE" value="$(find spinnaker_sdk_camera_driver)/cfg/debug_console.conf"/>
 
   <!-- acquisition spinnaker params-->
   <arg name="binning"           default="1"      doc="Binning for cameras, when changing from 2 to 1 cameras need to be unplugged and replugged"/>
@@ -15,7 +15,7 @@
                                                       AutoExposureTargetGreyValueAuto will be set to continuous(auto)
                                                       also available as dynamic reconfigurable parameter.
                                                       This parameter has no meaning when auto exposure and auto gain are off" />
-  <arg name="frames"            default="3400"   doc="Numer of frames to save/view 0=ON"/>
+  <arg name="frames"            default="0"   doc="Numer of frames to save/view 0=ON"/>
   <arg name="live"              default="false"  doc="Show images on screen GUI"/>
   <arg name="live_grid"         default="false"  doc="Show images on screen GUI in a grid"/>
   <arg name="output"            default="screen" doc="display output to screen or log file"/>
@@ -26,7 +26,10 @@
   <arg name="time"              default="false"  doc="Show time/FPS on output"/>
   <arg name="to_ros"            default="true"   doc="Flag whether images should be published to ROS" />
   <arg name="utstamps"          default="false"  doc="Flag whether each image should have Unique timestamps vs the master cams time stamp for all" />
-  <arg name="max_rate_save"     default="false"  doc="Flag for max rate mode which is when the master triggerst the slaves and saves images at maximum rate possible" />
+  <arg name="max_rate_save"     default="true"  doc="Flag for max rate mode which is when the master triggerst the slaves and saves images at maximum rate possible" />
+  <arg name="acquisition_gdb"     default="false"   />
+  <arg name="_launch_prefix"     value="gdbserver localhost:9091" if="$(arg acquisition_gdb)"  />
+  <arg name="_launch_prefix"     value="" unless="$(arg acquisition_gdb)"  />
 
 
   <!-- nodelet manager params-->
@@ -36,14 +39,14 @@
 
   <!-- Capture nodelet params-->
   <arg name="tf_prefix" default="" doc="will prefix (arg tf_prefix)/ to existing frame_id in Image msg and camerainfo msg" />
-  <arg name="config_file"          default="$(find spinnaker_sdk_camera_driver)/params/multi-cam_example.yaml" doc="multi-cam_example.yaml, or test_params.yaml File specifying the parameters of the camera_array"/>
+  <arg name="config_file"          default="$(find spinnaker_sdk_camera_driver)/params/dualCam.yaml" doc="dualCam.yaml, or test_params.yaml File specifying the parameters of the camera_array"/>
 
   <!-- start the nodelet manager if $(arg start_nodelet_manager) is true-->
-  <node pkg="nodelet" type="nodelet" name="$(arg manager)" args="manager" output="screen" unless="$(arg external_manager)" />
+  <node pkg="nodelet" type="nodelet" name="$(arg manager)" args="manager" output="screen" unless="$(arg external_manager)" launch-prefix="$(arg _launch_prefix)" />
 
   <!-- load the acquisition nodelet -->
   <node pkg="nodelet" type="nodelet" name="acquisition_node"
-          args="load acquisition/Capture $(arg manager)" >
+          args="load acquisition/Capture $(arg manager)"  >
     <!-- load the acquisition node parameters file.  Note any parameters provided in this file will 
          override what is in the yaml file.  Thus use it to set parameters camer_array configuration params -->
     <rosparam command="load"        file="$(arg config_file)" />
