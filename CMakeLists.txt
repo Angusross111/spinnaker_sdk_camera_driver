@@ -21,7 +21,6 @@ find_package(catkin REQUIRED COMPONENTS
   dynamic_reconfigure
   nodelet
 )
-find_package(trigger_msgs)
 find_package(exiv2 REQUIRED)
 #find_package(PCL REQUIRED)
 
