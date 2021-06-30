@@ -300,8 +300,6 @@ void acquisition::Camera::trigger() {
     CCommandPtr ptr = nodeMap.GetNode("TriggerSoftware");
     if (!IsAvailable(ptr) || !IsWritable(ptr))
         ROS_FATAL_STREAM("Unable to execute trigger. Aborting...");
-
-    ROS_DEBUG_STREAM("Executing software trigger...");
     ptr->Execute();
     
 }
