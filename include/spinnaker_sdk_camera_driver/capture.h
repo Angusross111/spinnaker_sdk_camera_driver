@@ -9,9 +9,12 @@
 #include <boost/filesystem.hpp>
 //ROS
 #include "std_msgs/Float64.h"
+#include "std_msgs/Int64.h"
 #include "std_msgs/String.h"
 #include "std_msgs/Bool.h"
 #include "msgs_and_srvs/ImageTriggerMsg.h"
+#include "msgs_and_srvs/GpsTaggedImageMsg.h"
+#include "msgs_and_srvs/CollectionBenchmarkMsg.h"
 //Dynamic reconfigure
 #include <dynamic_reconfigure/server.h>
 #include <spinnaker_sdk_camera_driver/spinnaker_camConfig.h>
@@ -78,6 +81,7 @@ namespace acquisition {
         void save_mat_frames(int);
         void save_binary_frames(int);
         void get_mat_images();
+        Mat convert_to_mat(ImagePtr);
         void update_grid();
         void export_to_ROS();
         void dynamicReconfigureCallback(spinnaker_sdk_camera_driver::spinnaker_camConfig &config, uint32_t level);
@@ -152,6 +156,8 @@ namespace acquisition {
         bool VERIFY_BINNING_;
         uint64_t SPINNAKER_GET_NEXT_IMAGE_TIMEOUT_;
         
+        boost::optional<msgs_and_srvs::ImageTriggerMsg> nmea_trigger;
+
         void assignSoftwareTriggerCallback(const msgs_and_srvs::ImageTriggerMsg::ConstPtr& msg);
         ros::Subscriber software_trigger_sub_;
 
@@ -175,6 +181,10 @@ namespace acquisition {
 
         ros::Publisher acquisition_pub;
         //vector<ros::Publisher> camera_image_pubs;
+        vector<ros::Publisher> camera_image_gps_pubs;
+        vector<ros::Publisher> image_write_queue_pubs;
+        ros::Publisher camera_fps_pub;
+        vector<ros::Publisher> benchmark_pubs;
         vector<image_transport::CameraPublisher> camera_image_pubs;
         //vector<ros::Publisher> camera_info_pubs;
 

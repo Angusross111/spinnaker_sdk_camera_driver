@@ -128,6 +128,8 @@ void acquisition::Capture::init_variables_register_to_ros() {
     GRID_CREATED_ = false;
     VERIFY_BINNING_ = false;
     
+    //GPS Data
+    nmea_trigger = boost::none;
 
     //read_settings(config_file);
     read_parameters();
@@ -145,13 +147,13 @@ void acquisition::Capture::init_variables_register_to_ros() {
                     << spinnakerLibraryVersion.type << "."
                     << spinnakerLibraryVersion.build);
  
-    software_trigger_sub_ = nh_.subscribe("/ImageCollectionProcessing/software_trigger", 1000, &acquisition::Capture::assignSoftwareTriggerCallback,this);
+    software_trigger_sub_ = nh_.subscribe("/ImageCollection/software_trigger", 1000, &acquisition::Capture::assignSoftwareTriggerCallback,this);
 
     load_cameras();
 
     //initializing the ros publisher
     acquisition_pub = nh_.advertise<spinnaker_sdk_camera_driver::SpinnakerImageNames>("camera", 1000);
-
+    
     
     //dynamic reconfigure
     dynamicReCfgServer_ = new dynamic_reconfigure::Server<spinnaker_sdk_camera_driver::spinnaker_camConfig>(nh_pvt_);
@@ -211,6 +213,9 @@ void acquisition::Capture::load_cameras() {
                 
                 camera_image_pubs.push_back(it_->advertiseCamera("camera_array/"+cam_names_[j]+"/image_raw", 1));
                 //camera_info_pubs.push_back(nh_.advertise<sensor_msgs::CameraInfo>("camera_array/"+cam_names_[j]+"/camera_info", 1));
+                camera_image_gps_pubs.push_back(nh_.advertise<msgs_and_srvs::GpsTaggedImageMsg>("camera_array/"+cam_names_[j]+"/gps_image",1,true));
+                camera_fps_pub = nh_.advertise<std_msgs::Float64>("camera_array/camera_fps",1,true);
+                benchmark_pubs.push_back(nh_.advertise<msgs_and_srvs::CollectionBenchmarkMsg>("camera_array/"+cam_names_[j]+"/benchmark",1,true));
 
                 img_msgs.push_back(sensor_msgs::ImagePtr());
 
@@ -941,6 +946,22 @@ void acquisition::Capture::save_binary_frames(int dump) {
     
 }
 
+Mat acquisition::Capture::convert_to_mat(ImagePtr pImage) {
+
+    ImagePtr convertedImage;
+    convertedImage = pImage->Convert(PixelFormat_BGR8); //, NEAREST_NEIGHBOR);
+    unsigned int XPadding = convertedImage->GetXPadding();
+    unsigned int YPadding = convertedImage->GetYPadding();
+    unsigned int rowsize = convertedImage->GetWidth();
+    unsigned int colsize = convertedImage->GetHeight();
+    //image data contains padding. When allocating Mat container size, you need to account for the X,Y image data padding.
+    Mat img;
+    img = Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
+    return img.clone();
+
+    
+}
+
 void acquisition::Capture::get_mat_images() {
     //ros time stamp creation
     //mesg.header.stamp = ros::Time::now();
@@ -1183,19 +1204,21 @@ void acquisition::Capture::update_grid() {
 
 //*** CODE FOR MULTITHREADED WRITING
 void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_no) {
- 
+    double ml_grab_time_ = 0;
+    double ml_save_time_ = 0;
+    double ml_toMat_time_ = 0;
+    double ml_export_to_ROS_time_ = 0;
+
     ROS_DEBUG("  Write Queue to Disk Thread Initiated for cam: %d", cam_no);
-
-
     string id = cam_ids_[cam_no];
-
     int imageCnt =0;
     uint64_t timeStamp = 0;
     try{
         while( ros::ok() ) {
-            
+            double t = ros::Time::now().toSec();
             if (img_q->size()== 0)
                 continue;
+
             ROS_DEBUG_STREAM("  Write Queue to Disk for cam: "<< cam_no <<" size = "<<img_q->size());
 
             if (img_q->size()>100)
@@ -1208,17 +1231,66 @@ void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_n
             filename<<path_<<cam_names_[cam_no]<<"/"<<cam_names_[cam_no]
                     <<"_"<<id<<"_"<<todays_date_ << "_"<<std::setfill('0')
                     << std::setw(6) << imageCnt<<"_"<<timeStamp << ext_; 
+            ml_grab_time_ = ros::Time::now().toSec() - t;
+            t = ros::Time::now().toSec();
+            if (SAVE_ ) {
+                convertedImage->Save(filename.str().c_str());
+                ROS_DEBUG_STREAM("Image saved at " << filename.str());
+                ml_save_time_ = ros::Time::now().toSec() - t;
+                t = ros::Time::now().toSec();
+            }
+            if (EXPORT_TO_ROS_){
+                Mat mat_frame = convert_to_mat(convertedImage);
+                ml_toMat_time_ = ros::Time::now().toSec() - t;
+                t = ros::Time::now().toSec();
+                std_msgs::Header img_msg_header;
+                string frame_id_prefix;
+                if (tf_prefix_.compare("") != 0)
+                    frame_id_prefix = tf_prefix_ +"/";
+                else frame_id_prefix="";
+
+                img_msg_header.frame_id = frame_id_prefix + "cam_"+to_string(cam_no)+"_optical_frame";
+                cam_info_msgs[cam_no]->header = img_msg_header;
+                img_msgs[cam_no]=cv_bridge::CvImage(img_msg_header, "bgr8", mat_frame).toImageMsg();
+                camera_image_pubs[cam_no].publish(img_msgs[cam_no],cam_info_msgs[cam_no]);
                 
-            convertedImage->Save(filename.str().c_str());
+                msgs_and_srvs::GpsTaggedImageMsg gps_tagged_image;
+                gps_tagged_image.image = *img_msgs[cam_no];
+                
+                gps_tagged_image.image_number = nmea_trigger->image_number;
+                gps_tagged_image.block_name = nmea_trigger->block_name;
+                gps_tagged_image.camera_number = cam_no;
+                gps_tagged_image.lat = nmea_trigger->lat;
+                gps_tagged_image.lon = nmea_trigger->lon;
+                gps_tagged_image.utm_x = nmea_trigger->utm_x;
+                gps_tagged_image.utm_y = nmea_trigger->utm_y;
+                gps_tagged_image.altitude = nmea_trigger->altitude;
+                gps_tagged_image.heading = nmea_trigger->heading;
+                camera_image_gps_pubs[cam_no].publish(gps_tagged_image);
+                ml_export_to_ROS_time_ = ros::Time::now().toSec() - t;
+            }
+
+            imageCnt++;
+            double total_time = ml_grab_time_ + ml_save_time_ + ml_toMat_time_+export_to_ROS_time_;
+            msgs_and_srvs::CollectionBenchmarkMsg benchmarkMsg;
+            benchmarkMsg.totalTime = total_time*1000;
+            benchmarkMsg.fps = 1/total_time;
+            benchmarkMsg.grab = ml_grab_time_*1000;
+            benchmarkMsg.save = ml_save_time_*1000;
+            benchmarkMsg.convert = ml_toMat_time_*1000;
+            benchmarkMsg.export2Ros = ml_export_to_ROS_time_*1000;
+            benchmarkMsg.queueSize = (int)img_q->size();
+            benchmark_pubs[cam_no].publish(benchmarkMsg);
+            ROS_INFO_COND(TIME_BENCHMARK_,"total time (ms): %.1f \tFPS: %.1f",total_time*1000,1/total_time);
+            ROS_INFO_COND(TIME_BENCHMARK_,"Times (ms):- grab: %.1f, save: %.1f, toMat: %.1f, exp2ROS: %.1f",
+                          ml_grab_time_*1000,ml_save_time_*1000,ml_toMat_time_*1000,ml_export_to_ROS_time_*1000);
+            ROS_DEBUG_STREAM("Image Queue size for cam"<< cam_no <<" is ="<< img_q->size());
+            
             // release the image before popping out to save memory
             convertedImage->Release();
-            ROS_INFO("image Queue size for cam %d is = %zu",cam_no, img_q->size());
             queue_mutex_.lock();
             img_q->pop();
             queue_mutex_.unlock();
-
-            ROS_DEBUG_STREAM("Image saved at " << filename.str());
-            imageCnt++;
         }
     }
     catch(const std::exception &e){
@@ -1226,41 +1298,34 @@ void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_n
     }
 }
 
-void acquisition::Capture::acquire_images_to_queue(vector<queue<ImagePtr>>*  img_qs) {
-    int result = 0;
-    
+void acquisition::Capture::acquire_images_to_queue(vector<queue<ImagePtr>>*  img_qs) {    
     ROS_DEBUG("  Acquire Images to Queue Thread Initiated");
     start_acquisition();
     ROS_DEBUG("  Acquire Images to Queue Thread -> Acquisition Started");
-    
+    double t = ros::Time::now().toSec();
+    double acquire_time = ros::Time::now().toSec();
     // Retrieve, convert, and save images for each camera
-    auto start = ros::Time::now().toSec();
-    auto elapsed = (ros::Time::now().toSec() - start)*1000;
-
     try{
         while( ros::ok() ) {
-            uint64_t timeStamp = 0;
             for (int i = 0; i < numCameras_; i++) {
+                t = ros::Time::now().toSec();
                 try {
                     //  grab_frame() is a blocking call. It waits for the next image acquired by the camera 
                     ImagePtr convertedImage = cams[i].grab_frame();
-               
                     queue_mutex_.lock();
                     img_qs->at(i).push(convertedImage);
                     queue_mutex_.unlock();
-
                     ROS_DEBUG_STREAM("Queue no. "<<i<<" size: "<<img_qs->at(i).size());
-   
+                    
                 }
                 catch (Spinnaker::Exception &e) {
                     ROS_ERROR_STREAM("  Exception in Acquire to queue thread" << "\nError: " << e.what());
-                    result = -1;
                 }
-                if(i==0) {
-                    elapsed = (ros::Time::now().toSec() - start)*1000;
-                    start = ros::Time::now().toSec();
-                    //cout << "Microsecs passed: " << microseconds << endl;
-                    ROS_DEBUG_STREAM("Rate of cam 0 write to queue: " << 1e3/elapsed);
+                if ( i == 0){
+                    acquire_time = ros::Time::now().toSec() - t;
+                    std_msgs::Float64 camerafpsMsg;
+                    camerafpsMsg.data = 1/acquire_time;
+                    camera_fps_pub.publish(camerafpsMsg);
                 }
             }
         }
@@ -1348,8 +1413,10 @@ void acquisition::Capture::dynamicReconfigureCallback(spinnaker_sdk_camera_drive
 
 void acquisition::Capture::assignSoftwareTriggerCallback(const msgs_and_srvs::ImageTriggerMsg::ConstPtr& msg){
     
-    ROS_INFO_STREAM("Callback");
+    ROS_DEBUG_STREAM("Callback");
+    nmea_trigger = *msg;
     trigger_capture_ = true;
     cams[MASTER_CAM_].trigger();
 }
+
 
