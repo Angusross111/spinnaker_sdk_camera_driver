@@ -212,7 +212,6 @@ void acquisition::Capture::load_cameras() {
                 cams.push_back(cam);
                 
                 camera_image_pubs.push_back(it_->advertiseCamera("camera_array/"+cam_names_[j]+"/image_raw", 1));
-                //camera_info_pubs.push_back(nh_.advertise<sensor_msgs::CameraInfo>("camera_array/"+cam_names_[j]+"/camera_info", 1));
                 camera_image_gps_pubs.push_back(nh_.advertise<msgs_and_srvs::GpsTaggedImageMsg>("camera_array/"+cam_names_[j]+"/gps_image",1,true));
                 camera_fps_pub = nh_.advertise<std_msgs::Float64>("camera_array/camera_fps",1,true);
                 benchmark_pubs.push_back(nh_.advertise<msgs_and_srvs::CollectionBenchmarkMsg>("camera_array/"+cam_names_[j]+"/benchmark",1,true));
@@ -1203,10 +1202,11 @@ void acquisition::Capture::update_grid() {
 }
 
 //*** CODE FOR MULTITHREADED WRITING
-void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_no) {
+void acquisition::Capture::write_queue_to_disk(queue<Metadata>* img_q, int cam_no) {
     double ml_grab_time_ = 0;
     double ml_save_time_ = 0;
     double ml_toMat_time_ = 0;
+    double metadata_write_time_ = 0;
     double ml_export_to_ROS_time_ = 0;
 
     ROS_DEBUG("  Write Queue to Disk Thread Initiated for cam: %d", cam_no);
@@ -1224,7 +1224,8 @@ void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_n
             if (img_q->size()>100)
                 ROS_WARN_STREAM("  Queue "<<cam_no<<" size is :"<< img_q->size());
             
-            ImagePtr convertedImage = img_q->front();
+            ImagePtr convertedImage = img_q->front().image;
+            msgs_and_srvs::ImageTriggerMsg trigger_message = img_q->front().trigger_message;
             timeStamp =  convertedImage->GetTimeStamp() * 1000;
             // Create a unique filename
             ostringstream filename;
@@ -1238,6 +1239,30 @@ void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_n
                 ROS_DEBUG_STREAM("Image saved at " << filename.str());
                 ml_save_time_ = ros::Time::now().toSec() - t;
                 t = ros::Time::now().toSec();
+
+                boost::property_tree::ptree ptree;
+                ptree.put("camera.block_name", trigger_message.block_name);
+                ptree.put("camera.cam_no", cam_no);
+                ptree.put("camera.image_number", trigger_message.image_number);
+                ptree.put("camera.lat", trigger_message.lat);
+                ptree.put("camera.lon", trigger_message.lon);
+                ptree.put("camera.utm_x", trigger_message.utm_x);
+                ptree.put("camera.utm_y", trigger_message.utm_y);
+                ptree.put("camera.altitude", trigger_message.altitude);
+                ptree.put("camera.heading", trigger_message.heading);
+
+                std::ofstream file;
+	            std::ostringstream oss;
+
+	            boost::property_tree::write_json(oss, ptree);
+
+                Exiv2::ExifData exif_data;
+                exif_data["Exif.Image.Model"] = "Test 1";  
+                exif_data["Exif.Image.ImageDescription"] = oss.str(); 
+                Exiv2::Image::UniquePtr image_exif_file = Exiv2::ImageFactory::open(filename.str());
+                image_exif_file->setExifData(exif_data);
+				image_exif_file->writeMetadata();
+                metadata_write_time_ = ros::Time::now().toSec() - t;
             }
             if (EXPORT_TO_ROS_){
                 Mat mat_frame = convert_to_mat(convertedImage);
@@ -1257,33 +1282,34 @@ void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_n
                 msgs_and_srvs::GpsTaggedImageMsg gps_tagged_image;
                 gps_tagged_image.image = *img_msgs[cam_no];
                 
-                gps_tagged_image.image_number = nmea_trigger->image_number;
-                gps_tagged_image.block_name = nmea_trigger->block_name;
+                gps_tagged_image.image_number = trigger_message.image_number;
+                gps_tagged_image.block_name = trigger_message.block_name;
                 gps_tagged_image.camera_number = cam_no;
-                gps_tagged_image.lat = nmea_trigger->lat;
-                gps_tagged_image.lon = nmea_trigger->lon;
-                gps_tagged_image.utm_x = nmea_trigger->utm_x;
-                gps_tagged_image.utm_y = nmea_trigger->utm_y;
-                gps_tagged_image.altitude = nmea_trigger->altitude;
-                gps_tagged_image.heading = nmea_trigger->heading;
+                gps_tagged_image.lat = trigger_message.lat;
+                gps_tagged_image.lon = trigger_message.lon;
+                gps_tagged_image.utm_x = trigger_message.utm_x;
+                gps_tagged_image.utm_y = trigger_message.utm_y;
+                gps_tagged_image.altitude = trigger_message.altitude;
+                gps_tagged_image.heading = trigger_message.heading;
                 camera_image_gps_pubs[cam_no].publish(gps_tagged_image);
                 ml_export_to_ROS_time_ = ros::Time::now().toSec() - t;
             }
 
             imageCnt++;
-            double total_time = ml_grab_time_ + ml_save_time_ + ml_toMat_time_+export_to_ROS_time_;
+            double total_time = ml_grab_time_ + ml_save_time_ + metadata_write_time_+ ml_toMat_time_+export_to_ROS_time_;
             msgs_and_srvs::CollectionBenchmarkMsg benchmarkMsg;
             benchmarkMsg.totalTime = total_time*1000;
             benchmarkMsg.fps = 1/total_time;
             benchmarkMsg.grab = ml_grab_time_*1000;
             benchmarkMsg.save = ml_save_time_*1000;
+            benchmarkMsg.writeMetadata = metadata_write_time_*1000;
             benchmarkMsg.convert = ml_toMat_time_*1000;
             benchmarkMsg.export2Ros = ml_export_to_ROS_time_*1000;
             benchmarkMsg.queueSize = (int)img_q->size();
             benchmark_pubs[cam_no].publish(benchmarkMsg);
             ROS_INFO_COND(TIME_BENCHMARK_,"total time (ms): %.1f \tFPS: %.1f",total_time*1000,1/total_time);
-            ROS_INFO_COND(TIME_BENCHMARK_,"Times (ms):- grab: %.1f, save: %.1f, toMat: %.1f, exp2ROS: %.1f",
-                          ml_grab_time_*1000,ml_save_time_*1000,ml_toMat_time_*1000,ml_export_to_ROS_time_*1000);
+            ROS_INFO_COND(TIME_BENCHMARK_,"Times (ms):- grab: %.1f, save: %.1f, metadata: %.1f, toMat: %.1f, exp2ROS: %.1f",
+                          ml_grab_time_*1000,ml_save_time_*1000,metadata_write_time_*1000,ml_toMat_time_*1000,ml_export_to_ROS_time_*1000);
             ROS_DEBUG_STREAM("Image Queue size for cam"<< cam_no <<" is ="<< img_q->size());
             
             // release the image before popping out to save memory
@@ -1298,7 +1324,7 @@ void acquisition::Capture::write_queue_to_disk(queue<ImagePtr>* img_q, int cam_n
     }
 }
 
-void acquisition::Capture::acquire_images_to_queue(vector<queue<ImagePtr>>*  img_qs) {    
+void acquisition::Capture::acquire_images_to_queue(vector<queue<Metadata>>*  img_qs) {    
     ROS_DEBUG("  Acquire Images to Queue Thread Initiated");
     start_acquisition();
     ROS_DEBUG("  Acquire Images to Queue Thread -> Acquisition Started");
@@ -1311,9 +1337,11 @@ void acquisition::Capture::acquire_images_to_queue(vector<queue<ImagePtr>>*  img
                 t = ros::Time::now().toSec();
                 try {
                     //  grab_frame() is a blocking call. It waits for the next image acquired by the camera 
-                    ImagePtr convertedImage = cams[i].grab_frame();
+                    struct Metadata captured_image;
+                    captured_image.image = cams[i].grab_frame();
+                    captured_image.trigger_message = *nmea_trigger;
                     queue_mutex_.lock();
-                    img_qs->at(i).push(convertedImage);
+                    img_qs->at(i).push(captured_image);
                     queue_mutex_.unlock();
                     ROS_DEBUG_STREAM("Queue no. "<<i<<" size: "<<img_qs->at(i).size());
                     
@@ -1344,10 +1372,12 @@ void acquisition::Capture::run_mt() {
     
     boost::thread_group threads;
 
-    vector<std::queue<ImagePtr>> image_queue_vector;
+    
+
+    vector<std::queue<Metadata>> image_queue_vector;
 
     for (int i=0; i<numCameras_; i++) {
-        std::queue<ImagePtr> img_ptr_queue;
+        std::queue<Metadata> img_ptr_queue;
         image_queue_vector.push_back(img_ptr_queue);
     }
     

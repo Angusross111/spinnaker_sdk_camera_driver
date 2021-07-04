@@ -68,10 +68,13 @@ namespace acquisition {
 
         void read_parameters();
         std::string todays_date();
-
+        struct Metadata {
+            ImagePtr image;
+            msgs_and_srvs::ImageTriggerMsg trigger_message;
+        };
         
-        void write_queue_to_disk(queue<ImagePtr>*, int);
-        void acquire_images_to_queue(vector<queue<ImagePtr>>*);
+        void write_queue_to_disk(queue<Metadata>*, int);
+        void acquire_images_to_queue(vector<queue<Metadata>>*);
     
     private:
 
@@ -88,6 +91,8 @@ namespace acquisition {
        
         float mem_usage();
     
+       
+
         SystemPtr system_;    
         CameraList camList_;
         vector<acquisition::Camera> cams;
